@@ -1,0 +1,34 @@
+#!/bin/bash
+# kasutajad_failist - loeb alati failist nimega "kasutajad" (üks kasutajanimi reas) ja kutsub lisa_kasutaja
+# Käivita samas kataloogis, kus on lisa_kasutaja
+# Kasutus: sudo ./kasutajad_failist
+
+set -euo pipefail
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Käivita root'i õigustes (nt: sudo ./kasutajad_failist)."
+  exit 1
+fi
+
+FAIL="kasutajad"
+if [ ! -f "$FAIL" ]; then
+  echo "Faili '$FAIL' ei leitud. Palun loo see ja proovi uuesti."
+  exit 1
+fi
+
+# Kindlusta, et kutsume lisa_kasutaja oma kataloogist
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
+LISA="$SCRIPT_DIR/lisa_kasutaja"
+
+if [ ! -x "$LISA" ]; then
+  echo "Viga: $LISA ei leitud või ei ole käivitatav. Veendu, et lisa_kasutaja on samas kataloogis ja chmod +x tehtud."
+  exit 1
+fi
+
+while IFS= read -r kasutaja || [ -n "$kasutaja" ]; do
+  kasutaja=$(printf "%s" "$kasutaja" | tr -d '\r\n')
+  [ -z "$kasutaja" ] && continue
+  "$LISA" "$kasutaja"
+done < "$FAIL"
+
+echo "Valmis: kõik kasutajad failist '$FAIL' töödeldud."

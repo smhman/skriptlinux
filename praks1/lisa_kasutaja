@@ -1,0 +1,57 @@
+#!/bin/bash
+# Kasutus: lisa_kasutaja kasutajanimi
+
+if [ $# -ne 1 ]; then
+  echo "Kasutus: $0 kasutajanimi"
+  exit 1
+fi
+
+# Nõua root’i (sudo on OK)
+if [ "$EUID" -ne 0 ]; then
+  echo "Käivita root’i õigustes (nt: sudo $0 kasutajanimi)."
+  exit 1
+fi
+
+KASUTAJANIMI="$1"
+
+# Kui juba olemas, välju viisakalt
+if id "$KASUTAJANIMI" &>/dev/null; then
+  echo "Kasutaja '$KASUTAJANIMI' juba olemas."
+  exit 0
+fi
+
+# Loo kasutaja + kodukataloog + bash shell
+useradd -m -s /bin/bash "$KASUTAJANIMI" || { echo "useradd ebaõnnestus"; exit 1; }
+
+HOME_DIR=$(eval echo "~$KASUTAJANIMI")
+
+# Loome tüüpprofiilid (kui puuduvad)
+[ -f "$HOME_DIR/.bashrc" ] || cat > "$HOME_DIR/.bashrc" <<'EOF'
+# .bashrc
+[ -f ~/.profile ] && . ~/.profile
+EOF
+
+[ -f "$HOME_DIR/.profile" ] || cat > "$HOME_DIR/.profile" <<'EOF'
+# .profile
+export PATH="$HOME/bin:$PATH"
+EOF
+
+[ -f "$HOME_DIR/.bash_logout" ] || cat > "$HOME_DIR/.bash_logout" <<'EOF'
+# .bash_logout
+echo "Goodbye, $USER"
+EOF
+
+# .ssh struktuur
+if [ ! -d "$HOME_DIR/.ssh" ]; then
+  mkdir -p "$HOME_DIR/.ssh"
+  : > "$HOME_DIR/.ssh/authorized_keys"
+  chmod 700 "$HOME_DIR/.ssh"
+  chmod 600 "$HOME_DIR/.ssh/authorized_keys"
+fi
+
+chown -R "$KASUTAJANIMI":"$KASUTAJANIMI" "$HOME_DIR"
+
+# Kontroll
+echo "Kasutaja '$KASUTAJANIMI' loodud. Kodukataloog: $HOME_DIR"
+grep "^$KASUTAJANIMI:" /etc/passwd
+grep "^$KASUTAJANIMI:" /etc/shadow

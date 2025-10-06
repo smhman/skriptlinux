@@ -1,0 +1,35 @@
+#!/bin/bash
+# kasutajad_failist_parooliga - loeb alati failist "kasutajad_paroolid" (read kujul kasutaja:parool)
+# Seadistab paroolid shadow faili
+# Kasutus: sudo ./kasutajad_failist_parooliga
+
+set -euo pipefail
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Käivita root'i õigustes (nt: sudo ./kasutajad_failist_parooliga)."
+  exit 1
+fi
+
+FAIL="kasutajad_paroolid"
+if [ ! -f "$FAIL" ]; then
+  echo "Faili '$FAIL' ei leitud. Palun loo see ja proovi uuesti."
+  exit 1
+fi
+
+while IFS=':' read -r kasutaja parool || [ -n "${kasutaja:-}" ]; do
+  kasutaja=$(printf "%s" "$kasutaja" | tr -d '\r\n')
+  parool=$(printf "%s" "$parool" | tr -d '\r\n')
+  [ -z "$kasutaja" ] && continue
+
+  if id "$kasutaja" &>/dev/null; then
+    echo "Kasutaja '$kasutaja' juba olemas — uuendan parooli."
+  else
+    useradd -m -s /bin/bash "$kasutaja"
+    echo "Loodud kasutaja $kasutaja"
+  fi
+
+  echo "$kasutaja:$parool" | chpasswd
+  echo "Seatud parool kasutajale $kasutaja"
+done < "$FAIL"
+
+echo "Valmis: kõik kasutajad failist '$FAIL' töödeldud."

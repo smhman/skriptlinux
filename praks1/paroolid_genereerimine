@@ -1,0 +1,59 @@
+#!/bin/bash
+# paroolid_genereeri - loeb alati failist "kasutajad", genereerib igaühele parooli (pwgen) ja salvestab loodud_kasutajad_paroolidega.log
+# Vastavalt ülesande 6 täiendusele: SUDO kasutamine on keelatud — skript peab jooksma päris root'ina (su -)
+# Kasutus:
+#  su -
+#  ./paroolid_genereeri
+
+set -euo pipefail
+
+# Keela sudo kaudu käivitamine
+if [ -n "${SUDO_USER:-}" ]; then
+  echo "❌ Seda skripti EI TOHI käivitada sudo kaudu! Kasuta: su - ja käivita kui päris root."
+  exit 1
+fi
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Käivita päris root'ina (su -)."
+  exit 1
+fi
+
+FAIL="kasutajad"
+LOG="loodud_kasutajad_paroolidega.log"
+
+if [ ! -f "$FAIL" ]; then
+  echo "Faili '$FAIL' ei leitud. Palun loo see ja proovi uuesti."
+  exit 1
+fi
+
+# Kontroll pwgen olemasolu ja kui apt-get on kasutatav, paigalda vajadusel
+if ! command -v pwgen &>/dev/null; then
+  echo "pwgen puudub; proovime paigaldada (apt-get)..."
+  if command -v apt-get &>/dev/null; then
+    apt-get update -qq && apt-get install -y pwgen
+  else
+    echo "Automaatset paigaldust ei saa teha — paigalda 'pwgen' käsitsi."
+    exit 1
+  fi
+fi
+
+: > "$LOG"
+
+while IFS= read -r kasutaja || [ -n "$kasutaja" ]; do
+  kasutaja=$(printf "%s" "$kasutaja" | tr -d '\r\n')
+  [ -z "$kasutaja" ] && continue
+
+  if id "$kasutaja" &>/dev/null; then
+    echo "Kasutaja '$kasutaja' juba olemas — uuendan parooli."
+  else
+    useradd -m -s /bin/bash "$kasutaja"
+    echo "Loodud kasutaja $kasutaja"
+  fi
+
+  parool="$(pwgen -s 12 1)"   # 12-sümboline tugev parool
+  echo "$kasutaja:$parool" | chpasswd
+  echo "$kasutaja:$parool" >> "$LOG"
+  echo "Lisatud/uuendatud: $kasutaja"
+done < "$FAIL"
+
+echo "Valmis. Paroolid salvestatud faili '$LOG'."
